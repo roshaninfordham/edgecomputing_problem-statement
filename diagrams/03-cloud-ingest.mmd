@@ -1,0 +1,21 @@
+%% Cloud ingest detail. Where the AWS service names appear.
+%% One broker in, three fan-out paths out.
+flowchart TB
+    DEV["Edge devices<br/>(X.509 identity, MQTT QoS 1)"] --> CORE["AWS IoT Core<br/>(MQTT broker)"]
+    CORE --> RULES["IoT Rules + EventBridge"]
+
+    RULES -->|detection events| L1["Lambda: event handler<br/>(debounce / aggregate)"]
+    L1 --> SNS["SNS (push) + SES (email)"]
+    L1 --> FH1["Kinesis Firehose"]
+
+    RULES -->|telemetry| FH2["Kinesis Firehose"]
+    FH1 --> PIPE["Snowpipe"]
+    FH2 --> PIPE
+    PIPE --> SNOW["Snowflake"]
+
+    RULES -->|video clip uploaded| S3["S3 (video)"]
+    S3 --> LC["Lifecycle: 30d -> Glacier Deep Archive"]
+    S3 -->|object-create event| META["Lambda: write media_object row"]
+    META --> SNOW
+
+    RULES -->|device state| SHADOW["IoT Device Shadow + DynamoDB"]

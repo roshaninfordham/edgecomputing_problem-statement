@@ -1,0 +1,29 @@
+%% Control-plane loop: pushing a new detection algorithm to the fleet.
+%% Most candidates forget to draw this as its own loop. It is the
+%% "push new algorithms with a click" requirement, done safely:
+%% staged rollout, checksum verify, ack, and a rollback path.
+sequenceDiagram
+    autonumber
+    participant U as Operator (dashboard)
+    participant R as Model registry (S3, signed)
+    participant J as IoT Jobs (rollout controller)
+    participant D as Edge device
+    participant DB as algorithm_deployment
+
+    U->>R: upload model artifact + version
+    R->>R: sign + record checksum (sha256)
+    U->>J: start staged rollout
+    J->>DB: record deployment (stage=canary, status=pending)
+    J->>D: deploy to canary device
+    D->>R: pull artifact
+    D->>D: verify checksum, swap model
+    alt checksum ok and self-test passes
+        D->>J: ack success
+        J->>DB: status=active
+        J->>D: advance rollout (partial -> fleet)
+    else verify fails or health drops
+        D->>J: ack failure
+        J->>DB: stage=rolled_back
+        J->>D: restore previous model
+    end
+    J-->>U: rollout status (live)

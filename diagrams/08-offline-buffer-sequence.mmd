@@ -1,0 +1,25 @@
+%% What happens when the internet drops. The edge keeps working; events
+%% are durable and flush in order on reconnect; telemetry is droppable.
+sequenceDiagram
+    autonumber
+    participant S as Sensors
+    participant E as Edge device
+    participant B as Local buffer (bounded disk queue)
+    participant C as Cloud IoT hub
+
+    Note over E,C: Link is UP
+    S->>E: frames / signals
+    E->>C: telemetry + events (streamed)
+
+    Note over E,C: Link DROPS
+    S->>E: frames / signals
+    E->>E: keep detecting locally
+    E->>B: append events (ordered, durable)
+    E--xC: telemetry dropped (last-value-wins)
+    Note over E: life-safety events also fire a local alarm
+
+    Note over E,C: Link RESTORED
+    E->>B: read oldest-first
+    E->>C: flush buffered events in order (idempotent on event_id)
+    E->>C: resume live streaming
+    Note over B: buffer is bounded (24-72h). If it fills,<br/>drop telemetry first, keep events.

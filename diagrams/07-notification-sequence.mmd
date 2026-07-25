@@ -1,0 +1,24 @@
+%% Notification path: detection to a human, with debounce so a flickering
+%% detector does not send 400 emails. Target end-to-end p95 < 5 s.
+sequenceDiagram
+    autonumber
+    participant D as Edge device
+    participant C as IoT Core (MQTT)
+    participant R as IoT Rule
+    participant L as Lambda handler
+    participant Q as Debounce / dedupe (near-dup, config rules)
+    participant N as SNS / SES
+    participant H as Human (operator)
+
+    D->>C: publish detection_event (QoS 1)
+    C->>R: match event topic
+    R->>L: invoke with event
+    L->>Q: same incident within window? user opted in?
+    alt suppressed (near-duplicate or quiet hours)
+        Q-->>L: drop / aggregate
+    else deliver
+        Q-->>L: pass
+        L->>N: push + email
+        N->>H: alert (target < 5 s from detection)
+    end
+    Note over D,H: Fire (life-safety) also has a LOCAL alarm at the edge,<br/>< 1 s, independent of the WAN.
