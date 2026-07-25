@@ -1,0 +1,32 @@
+%% Resilience, queues, and rate limits on one page. Every boundary that can
+%% overload or fail has a queue in front of it and a defined behaviour when
+%% it backs up. Nothing here is best-effort by accident.
+flowchart TB
+    subgraph EDGE["Edge"]
+        D["Device"]
+        BO["Backoff + jitter on throttle"]
+        BUF["Bounded local queue<br/>events kept, telemetry dropped first"]
+        D --> BUF
+        D -.->|throttled / offline| BO -.-> D
+        BUF -->|reconnect: in order, idempotent on event_id| OUT
+    end
+
+    OUT["MQTT publish (QoS 1)"] --> IOT["IoT Core<br/>respects account quotas"]
+    IOT --> RULES["Rules + EventBridge"]
+
+    RULES -->|events| LAM["Lambda notify handler<br/>debounce + token-bucket vs SES rate"]
+    LAM --> SEND["SNS push / SES email"]
+    LAM -.->|fails after retries| DLQ["SQS dead-letter queue"]
+    DLQ -->|inspect + replay| LAM
+
+    RULES -->|telemetry + events| FH["Firehose buffer<br/>(size / interval)"]
+    FH --> SP["Snowpipe"] --> SNOW["Snowflake"]
+    IOT -->|raw copy| RAW["RAW landing"]
+    RAW -.->|replay / reprocess| SNOW
+
+    subgraph APP["Dashboard"]
+        U["User"] --> WAF["WAF (rate rules)"]
+        WAF --> API["API Gateway<br/>usage-plan throttling"]
+        API --> BE["Backend"]
+        BE -->|statement queue, then scale out| SNOW
+    end
