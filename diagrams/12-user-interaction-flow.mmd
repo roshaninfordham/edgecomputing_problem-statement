@@ -1,0 +1,40 @@
+%% How a human uses the platform end to end. From alert to reviewing the
+%% clip, every camera-data access is permission-checked, signed, and audited.
+sequenceDiagram
+    autonumber
+    actor OP as Operator
+    participant APP as Dashboard (SPA)
+    participant API as API Gateway + Lambda
+    participant COG as Cognito
+    participant SNOW as Snowflake
+    participant S3 as S3 (video)
+    participant AUD as access_audit
+
+    OP->>APP: sign in
+    APP->>COG: authenticate
+    COG-->>APP: token (role, tenant)
+
+    Note over OP,SNOW: Morning check
+    APP->>API: get fleet status + telemetry
+    API->>SNOW: query (WH_BI, row policy applies)
+    SNOW-->>APP: device health, latest events
+
+    Note over OP,S3: Alert -> review footage
+    API-->>OP: push/email alert (PPE violation)
+    OP->>APP: open event
+    APP->>API: request clip for media_object
+    API->>API: check role + tenant (may view PII?)
+    alt allowed
+        API->>S3: create short-lived signed URL
+        API->>AUD: write access_audit row
+        API-->>APP: signed URL (expires in minutes)
+        APP->>S3: fetch clip directly
+    else not allowed
+        API-->>APP: 403, event shown without footage
+    end
+
+    Note over OP,SNOW: Investigate similar events
+    OP->>APP: "show events like this"
+    APP->>API: search by embedding
+    API->>SNOW: VECTOR_COSINE_SIMILARITY top-k (WH_VECTOR)
+    SNOW-->>APP: ranked similar events
