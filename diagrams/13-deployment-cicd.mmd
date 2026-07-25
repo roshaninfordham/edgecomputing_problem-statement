@@ -1,0 +1,32 @@
+%% How the platform is built and updated. Three pipelines: infrastructure,
+%% the dashboard app, and detection models. Each is versioned and reversible.
+flowchart TB
+    subgraph SRC["Source (git)"]
+        INFRA["infra/ (Terraform)"]
+        APPCODE["app/ (dashboard + API)"]
+        MODELS["models/ (detection algorithms)"]
+    end
+
+    subgraph CI["CI/CD"]
+        PLAN["terraform plan -> apply<br/>(manual approve)"]
+        BUILD["build + test app"]
+        SIGN["package + sign model<br/>record sha256"]
+    end
+
+    subgraph AWSENV["AWS environment"]
+        STACKS["VPC, IoT, S3, Snowpipe,<br/>Cognito, API, CloudFront"]
+        SPA["CloudFront + S3 (SPA)"]
+        APIS["API Gateway + Lambda/Fargate"]
+        REG["S3 model registry (versioned)"]
+    end
+
+    subgraph FLEET["Fleet"]
+        ROLL["IoT Jobs staged rollout<br/>canary -> partial -> fleet"]
+        DEVS["Devices verify checksum,<br/>swap, ack (or roll back)"]
+    end
+
+    INFRA --> PLAN --> STACKS
+    APPCODE --> BUILD --> SPA
+    BUILD --> APIS
+    MODELS --> SIGN --> REG --> ROLL --> DEVS
+    DEVS -.->|status| APIS

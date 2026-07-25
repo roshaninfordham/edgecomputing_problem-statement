@@ -1,0 +1,73 @@
+%% AWS reference architecture, grouped by plane. Each box is a real service.
+%% docs/08-aws-implementation.md explains why each one and its alternative.
+flowchart TB
+    subgraph EDGEP["Edge (on site)"]
+        DEV["Devices: Jetson / Pi + Coral<br/>X.509 identity, local buffer"]
+    end
+
+    subgraph INGEST["Ingest plane"]
+        CORE["IoT Core (MQTT broker + registry)"]
+        DEF["IoT Device Defender (security posture)"]
+        RULES["IoT Rules + EventBridge"]
+        FH["Kinesis Firehose"]
+    end
+
+    subgraph NOTIFY["Notification plane"]
+        LAM["Lambda handler (debounce)"]
+        SNS["SNS (push)"]
+        SES["SES (email)"]
+    end
+
+    subgraph CONTROL["Control plane (OTA / models)"]
+        JOBS["IoT Jobs (staged rollout)"]
+        SHADOW["Device Shadow + DynamoDB"]
+        SFN["Step Functions (orchestration)"]
+    end
+
+    subgraph STORE["Storage"]
+        S3V["S3 (video + model artifacts)"]
+        LC["S3 lifecycle -> Glacier Deep Archive"]
+        S3ING["S3 ingest stage"]
+    end
+
+    subgraph WAREHOUSE["Analytics"]
+        PIPE["Snowpipe"]
+        SNOW["Snowflake"]
+    end
+
+    subgraph APP["Dashboard / API"]
+        CF["CloudFront + S3 (SPA)"]
+        APIGW["API Gateway + Lambda / Fargate"]
+        COG["Cognito (10 users)"]
+    end
+
+    subgraph SEC["Security + ops"]
+        KMS["KMS"]
+        SM["Secrets Manager"]
+        CW["CloudWatch"]
+    end
+
+    DEV -->|MQTT QoS1| CORE
+    DEF -. monitors .- CORE
+    CORE --> RULES
+    RULES -->|events| LAM
+    LAM --> SNS
+    LAM --> SES
+    RULES -->|telemetry + events| FH --> S3ING --> PIPE --> SNOW
+    RULES -->|device state| SHADOW
+    DEV -->|video/clips| S3V
+    S3V --> LC
+    S3V -->|object-create| LAM
+    JOBS --> DEV
+    SFN --> JOBS
+    CF --> APIGW
+    APIGW --> COG
+    APIGW --> SNOW
+    APIGW -->|signed URL| S3V
+    APIGW --> SHADOW
+    APIGW --> JOBS
+    SM -. creds .- APIGW
+    KMS -. encrypts .- S3V
+    KMS -. encrypts .- SNOW
+    CW -. logs+alarms .- LAM
+    CW -. logs+alarms .- SNOW
