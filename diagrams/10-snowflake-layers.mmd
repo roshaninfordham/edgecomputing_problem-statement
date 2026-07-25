@@ -1,0 +1,42 @@
+%% Snowflake layered ("medallion") architecture. Data flows left to right
+%% and gets cleaner at each step. The messy outside world only touches RAW,
+%% so a new sensor or model can never break the tables the dashboard reads.
+flowchart LR
+    subgraph EDGE["Edge / cloud"]
+        FH["Firehose / device<br/>writes JSON to S3"]
+    end
+
+    subgraph SF["Snowflake (database EDGEIOT)"]
+        direction LR
+        subgraph RAW["RAW schema (landing)"]
+            RI["raw_ingest<br/>VARIANT, as-is"]
+        end
+        subgraph PIPE["Pipeline"]
+            ST["Streams<br/>(what's new)"]
+            TK["Tasks on WH_LOAD<br/>reshape + dedup"]
+        end
+        subgraph CORE["CORE (registry)"]
+            RG["tenant, site, device,<br/>sensor, sensor_type,<br/>algorithm, app_user, rules"]
+        end
+        subgraph EV["EVENTS (curated append)"]
+            DE["detection_event (+VECTOR)<br/>telemetry, media_object,<br/>notification_log"]
+        end
+        subgraph AN["ANALYTICS (serve)"]
+            VW["views + materialized views"]
+        end
+        subgraph GOV["GOVERNANCE"]
+            PZ["masking + row policies,<br/>access_audit"]
+        end
+    end
+
+    DASH["Dashboard / BI<br/>on WH_BI"]
+
+    FH -->|Snowpipe auto-ingest| RI
+    RI --> ST --> TK
+    TK --> DE
+    RG -. joins .- DE
+    DE --> VW
+    GOV -. enforces .- DE
+    GOV -. enforces .- VW
+    VW --> DASH
+    RG --> DASH

@@ -1,0 +1,19 @@
+%% Data lifecycle: the F3.3 vs F3.4 answer made visible.
+%% "Immediately accessible for 1 month" and "available at any point in
+%% time" are two tiers, not one requirement. Video is the expensive thing,
+%% so only video is tiered; structured events are tiny and stay hot forever.
+flowchart LR
+    subgraph VIDEO["Video / frames (the expensive bytes)"]
+        VH["S3 Standard<br/>hot, 0-30 days<br/>immediate"] -->|lifecycle rule| VC["S3 Glacier Deep Archive<br/>cold, all history<br/>retrieve in hours"]
+    end
+
+    subgraph STRUCT["Detection events + telemetry (tiny, compressed)"]
+        TH["Snowflake table<br/>clustered on ts"] -->|same table, date pruning| TA["All history<br/>query any point in time"]
+    end
+
+    subgraph META["media_object (pointer + metadata)"]
+        M["stays queryable in Snowflake forever<br/>(s3_uri, ts_range, storage_tier)"]
+    end
+
+    VH -. pointer .- M
+    VC -. pointer .- M

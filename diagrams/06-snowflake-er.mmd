@@ -1,0 +1,84 @@
+%% Snowflake entity model. The split is deliberate:
+%% the registry (left) rarely changes; the append tables (right) grow
+%% forever. sensor_type is the future-proof hinge - a new sensor kind is
+%% one row there, not a migration.
+erDiagram
+    TENANT ||--o{ SITE : owns
+    SITE ||--o{ DEVICE : hosts
+    DEVICE ||--o{ SENSOR : carries
+    SENSOR_TYPE ||--o{ SENSOR : classifies
+    DEVICE ||--o{ DETECTION_EVENT : emits
+    SENSOR ||--o{ DETECTION_EVENT : sourced_from
+    SENSOR ||--o{ TELEMETRY : sourced_from
+    DEVICE ||--o{ MEDIA_OBJECT : produces
+    DETECTION_EVENT }o--o| MEDIA_OBJECT : references
+    DETECTION_ALGORITHM ||--o{ ALGORITHM_DEPLOYMENT : versioned_as
+    DEVICE ||--o{ ALGORITHM_DEPLOYMENT : runs
+    DETECTION_ALGORITHM ||--o{ DETECTION_EVENT : produced_by
+
+    TENANT {
+        number tenant_id PK
+        string name
+    }
+    SITE {
+        number site_id PK
+        number tenant_id FK
+        string timezone
+    }
+    DEVICE {
+        number device_id PK
+        string device_uid
+        string hardware_model
+        string firmware_version
+        string status
+    }
+    SENSOR_TYPE {
+        number sensor_type_id PK
+        string code
+        string modality
+        string unit
+    }
+    SENSOR {
+        number sensor_id PK
+        number device_id FK
+        number sensor_type_id FK
+        variant config
+    }
+    DETECTION_ALGORITHM {
+        number algorithm_id PK
+        string name
+        string version
+        string task
+    }
+    ALGORITHM_DEPLOYMENT {
+        number deployment_id PK
+        number algorithm_id FK
+        number device_id FK
+        string rollout_stage
+        string status
+    }
+    DETECTION_EVENT {
+        string event_id PK
+        number device_id FK
+        number sensor_id FK
+        string event_type
+        timestamp ts
+        float confidence
+        variant attributes
+        vector embedding
+    }
+    TELEMETRY {
+        string telemetry_id PK
+        number device_id FK
+        number sensor_id FK
+        timestamp ts
+        string metric
+        float value_num
+    }
+    MEDIA_OBJECT {
+        string media_object_id PK
+        number device_id FK
+        string s3_uri
+        string storage_tier
+        boolean contains_pii
+    }
