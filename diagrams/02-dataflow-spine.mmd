@@ -1,0 +1,27 @@
+%% The data-flow spine: from a sensor signal to the three fan-out paths
+%% and back out to the dashboard. Follow the arrows once and the whole
+%% system makes sense.
+flowchart LR
+    SEN["Sensors"] --> EDGE["Edge inference"]
+    EDGE --> OUT{"telemetry / events / video"}
+
+    OUT --> INGEST["IoT ingest (MQTT)"]
+    INGEST --> RULES["Rules engine"]
+
+    RULES -->|events| NOTIF["Notification service"]
+    NOTIF --> PUSH["push / email"]
+
+    RULES -->|telemetry| BUFFER["Stream buffer"]
+    BUFFER --> SNOW["Snowflake (hot)"]
+
+    RULES -->|video| S3["Object storage (S3)"]
+    S3 --> COLD["lifecycle -> cold"]
+
+    RULES -->|device state| SHADOW["Device registry / shadow"]
+
+    SNOW --> DASH["Dashboard reads"]
+    SHADOW --> DASH
+    S3 -->|signed URL| DASH
+
+    DASH -->|config + new algorithm| DIST["Model distribution"]
+    DIST --> EDGE

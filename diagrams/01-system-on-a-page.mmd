@@ -1,0 +1,41 @@
+%% System on a page: five layers, one stable set of interfaces.
+%% The design rule: keep the interface between layers stable even as the
+%% insides change. That single principle is what "future-proof" means here.
+flowchart TB
+    subgraph L1["L1  Sensors"]
+        S1["Cameras"]
+        S2["Motion"]
+        S3["Future: humidity, air quality, ..."]
+    end
+
+    subgraph L2["L2  Edge"]
+        E1["Local CV inference"]
+        E2["Event generation + embeddings"]
+        E3["Store-and-forward buffer"]
+    end
+
+    subgraph L3["L3  Cloud"]
+        C1["IoT ingest (MQTT)"]
+        C2["Rules + notifications"]
+        C3["Model / OTA distribution"]
+        C4["Video object store (S3)"]
+    end
+
+    subgraph L4["L4  Analytics"]
+        D1["Snowflake: future-proof schema"]
+        D2["Hot 1 month + cold all-history tiers"]
+        D3["Vector search + similarity"]
+    end
+
+    subgraph L5["L5  Web dashboard"]
+        W1["Status + near-real-time telemetry"]
+        W2["Push algorithms / updates"]
+        W3["Privacy-controlled camera access"]
+    end
+
+    L1 -->|frames / signals| L2
+    L2 -->|telemetry + events + clips| L3
+    L3 -->|load| L4
+    L3 -.->|deploy models| L2
+    L4 -->|read| L5
+    L5 -.->|control| L3
